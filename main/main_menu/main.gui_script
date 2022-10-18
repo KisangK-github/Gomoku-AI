@@ -1,0 +1,80 @@
+local home = false
+local replay_2_players = false
+local replay_1_player = false
+local selected_2_players = false
+local selected_1_player = false
+
+function init(self)
+	msg.post(".", "acquire_input_focus")
+end
+
+function on_input(self, action_id, action)
+	if gui.pick_node(gui.get_node("2_players_select"), action.x, action.y) and action.pressed then	
+		selected_2_players = true
+		msg.post("/main_gui#2_players_load", "load")
+	end
+
+	if gui.pick_node(gui.get_node("vs_computer_select"), action.x, action.y) and action.pressed then
+		selected_1_player = true	
+		msg.post("/main_gui#1_player_load", "load")
+	end
+end
+
+function on_message(self, message_id, message, sender)
+	if message_id == hash("proxy_loaded") then
+		if selected_2_players == true then
+			msg.post("/main_gui#2_players_load", "init")
+			msg.post("/main_gui#2_players_load", "enable")
+			msg.post("/main_gui#main", "disable")
+			selected_2_players = false
+		elseif selected_1_player == true then
+			msg.post("/main_gui#1_player_load", "init")
+			msg.post("/main_gui#1_player_load", "enable")
+			msg.post("/main_gui#main", "disable")
+			selected_1_player = false
+		end
+	end
+
+	if message_id == hash("proxy_unloaded") then
+		if  home == true then
+			home = false
+			msg.post("/main_gui#main", "enable")
+		elseif selected_2_players == true  then
+			msg.post("/main_gui#2_players_load", "load")
+			msg.post("/main_gui#2_players_load", "init")
+			msg.post("/main_gui#2_players_load", "enable")
+			selected_2_players = false
+		elseif selected_1_player == true  then
+			msg.post("/main_gui#1_player_load", "load")
+			msg.post("/main_gui#1_player_load", "init")
+			msg.post("/main_gui#1_player_load", "enable")
+			selected_1_player = false
+		end
+	end
+
+	if message_id == hash("home_selected") and message.mode == "2 players" then
+		home = true
+		msg.post("/main_gui#2_players_load", "disable")
+		msg.post("/main_gui#2_players_load", "final")
+		msg.post("/main_gui#2_players_load", "unload")
+	elseif message_id == hash("home_selected") and message.mode == "1 player" then
+		home = true
+		msg.post("/main_gui#1_player_load", "disable")
+		msg.post("/main_gui#1_player_load", "final")
+		msg.post("/main_gui#1_player_load", "unload")
+	end	
+
+	if message_id == hash("replay_selected") and message.mode == "2 players" then
+		selected_2_players = true	
+		msg.post("/main_gui#2_players_load", "disable")
+		msg.post("/main_gui#2_players_load", "final")
+		msg.post("/main_gui#2_players_load", "unload")
+		
+			
+	elseif message_id == hash("replay_selected") and message.mode == "1 player" then
+		selected_1_player = true	
+		msg.post("/main_gui#1_player_load", "disable")
+		msg.post("/main_gui#1_player_load", "final")
+		msg.post("/main_gui#1_player_load", "unload")
+	end
+end

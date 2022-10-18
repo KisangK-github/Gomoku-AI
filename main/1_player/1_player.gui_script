@@ -1,0 +1,875 @@
+local board = {} -- 1 : white, -1 : black, 0: empty
+local TURN = "black"
+local available = true
+local black_stone = {} 
+local white_stone = {}
+local game_over = false
+local current_evaluation_value = 0
+
+function init(self)	
+
+	msg.post(".", "acquire_input_focus")
+	gui.set_visible(gui.get_node("selection_box"), false)
+	gui.set_visible(gui.get_node("white_stone"), false)
+	gui.set_visible(gui.get_node("black_stone"), false)
+
+
+	for i = 1, 15 do
+		board[i] = {}
+		for j = 1, 15 do
+			board[i][j] = 0
+		end
+	end 	
+end 
+
+function on_input(self, action_id, action)
+	
+	if action_id == hash("touch") then
+		if (action.x >= 5 and action.x <= 635 and action.y >= 253 and action.y <= 883) then
+		selection_box(action)
+		end 
+
+		if gui.pick_node (gui.get_node("place_button"), action.x, action.y) 
+		and gui.get_visible(gui.get_node("selection_box")) then
+			place_stone()
+			ai_white ()
+		end
+
+		if gui.is_enabled(gui.get_node("home_text")) 
+		and gui.pick_node (gui.get_node("home_text"), action.x, action.y) then
+			msg.post("main:/main_gui#main", "home_selected", {mode = "1 player"})
+		end	
+
+		if gui.is_enabled(gui.get_node("replay_text")) 
+		and gui.pick_node (gui.get_node("replay_text"), action.x, action.y) then
+			msg.post("main:/main_gui#main", "replay_selected", {mode = "1 player"})
+		end	
+	end
+end
+
+
+function turn_indicator ()
+	if TURN == "white" then
+		gui.set_visible(gui.get_node("player_1_not_turn"), true)
+		gui.set_visible(gui.get_node("player_2_not_turn"), false)
+	else
+		gui.set_visible(gui.get_node("player_1_not_turn"), false)
+		gui.set_visible(gui.get_node("player_2_not_turn"), true)
+	end
+end
+
+
+--places the selection box on the correspdonding square on the board
+function selection_box (action)
+	x_coord = math.floor((action.x - 5) /42) * 42 + 26
+	y_coord = math.floor((action.y - 253) /42) * 42 + 274
+	gui.set_position(gui.get_node("selection_box"), vmath.vector3(x_coord, y_coord, 0))
+	gui.set_visible(gui.get_node("selection_box"), true)
+end 
+
+
+--places the stone on the position designated by the selection box
+function place_stone ()
+	local stone_clone
+	local previous_board
+	local new_board
+	local y_index = (gui.get_position(gui.get_node("selection_box")).x - 26)/42 + 1
+	local x_index = 16 - ((gui.get_position(gui.get_node("selection_box")).y - 274)/42 + 1)
+	local x_coord
+	local y_coord
+
+	if board[x_index][y_index] == 1 or board[x_index][y_index] == -1 then
+		available = false
+	else
+		available = true
+	end 
+
+	if available == true then
+		if TURN == "black" then
+			stone_clone = gui.clone(gui.get_node("black_stone"))
+
+			gui.set_visible(gui.get_node("selection_box"), false)
+			gui.set_position(stone_clone, gui.get_position(gui.get_node("selection_box")))
+			gui.set_visible(stone_clone, true)
+
+			previous_board = copy_board()
+			board[x_index][y_index] = -1
+			new_board = copy_board()
+
+			current_evaluation_value = evaluation_update(x_index, y_index, current_evaluation_value, previous_board, new_board)
+
+			if check_win("black", x_index, y_index) then
+				game_over_menu()
+				gui.set_text(gui.get_node("game_over_menu_text"), "Black Wins")
+			end
+			
+			TURN = "white"
+
+			turn_indicator()
+
+			
+
+		--[[elseif TURN == "white" then
+			stone_clone = gui.clone(gui.get_node("white_stone"))
+
+			gui.set_visible(gui.get_node("selection_box"), false)
+			gui.set_position(stone_clone, gui.get_position(gui.get_node("selection_box")))
+			gui.set_visible(stone_clone, true)
+
+			previous_board = copy_board()
+			board[x_index][y_index] = 1
+			new_board = copy_board()
+
+			current_evaluation_value = evaluation_update(x_index, y_index, current_evaluation_value, previous_board, new_board)
+
+			if check_win("white", x_index, y_index) then
+				game_over_menu()
+				gui.set_text(gui.get_node("game_over_menu_text"), "White Wins")
+			end
+			
+			TURN = "black"--]]
+		end
+		
+		
+	end 
+end 	
+
+function game_over_menu ()
+	gui.set_visible(gui.get_node("game_over_shade"), true)
+	gui.set_enabled(gui.get_node("game_over_menu"), true)
+	gui.set_enabled(gui.get_node("home_text"), true)
+	gui.set_enabled(gui.get_node("replay_text"), true)
+	gui.set_enabled(gui.get_node("place_button"), false)
+	gui.set_enabled(gui.get_node("selection_box"), false)
+end
+
+function check_win (color, x_index, y_index)
+	local counter = 0
+	local i = x_index
+	local j = y_index
+	local stone_value
+
+	if color == "black" then 
+		stone_value = -1
+	else
+		stone_value = 1
+	end
+
+	while i >= 2 and (board[i - 1][j] == stone_value) do
+		i = i - 1
+	end 
+
+	-- count the number of connected stones
+	while i <= 15 and board[i][j] == stone_value do
+		counter = counter + 1
+		i = i + 1
+		if counter == 5 then
+			return (true)
+		end
+	end
+
+	-- find the starting position within a column
+	counter = 0
+	i = x_index
+	j = y_index
+
+	while j >= 2 and (board[i][j - 1] == stone_value) do
+		j = j - 1
+	end 
+
+	-- count the number of connected stones
+	while j <= 15 and board[i][j] == stone_value do
+		counter = counter + 1
+		j = j + 1
+		if counter == 5 then
+			return (true)
+		end
+	end
+
+	-- find the starting position within a diagonal
+	counter = 0
+	i = x_index
+	j = y_index
+	
+	while (i >= 2) and (j >= 2) and (board[i - 1][j - 1] == stone_value) do
+		i = i - 1
+		j = j - 1
+	end 
+
+	while i <= 15 and j <= 15 and board[i][j] == stone_value do
+		counter = counter + 1
+		i = i + 1
+		j = j + 1
+		if counter == 5 then
+			return (true)
+		end
+	end
+
+	counter = 0
+	i = x_index
+	j = y_index
+	while (i >= 2) and (j <= 14) and board[i][j] == stone_value do
+		i = i - 1
+		j = j + 1
+	end
+
+	while i <= 15 and j >= 1 and board[i][j] == stone_value do
+		counter = counter + 1
+		i = i + 1
+		j = j - 1
+		if counter == 5 then
+			return (true)
+		end
+	end
+	return (false)
+end
+
+function copy_board ()
+	new_board = {}
+	for i = 1, 15 do
+		new_board[i] = {}
+	end 
+	
+	for i = 1, 15 do
+		for j = 1, 15 do
+			new_board[i][j] = board[i][j]
+		end
+	end
+	return new_board
+end
+
+function copy_new_board(board)
+	new_board = {}
+	for i = 1, 15 do
+		new_board[i] = {}
+	end 
+
+	for i = 1, 15 do
+		for j = 1, 15 do
+			new_board[i][j] = board[i][j]
+		end
+	end
+	return new_board
+end
+
+function ai_white ()
+	local x_index
+	local y_index
+	local x_coord
+	local y_coord
+
+	x_index = ai_move("white")[1]
+	y_index = ai_move("white")[2]
+
+	print("DEBUG in ai_white(): x_index: ", x_index, "y_index: ", y_index)
+	y_coord = (15 - x_index) * 42 + 274
+	x_coord = (y_index - 1) * 42 + 26
+
+	stone_clone = gui.clone(gui.get_node("white_stone"))
+	gui.set_position(stone_clone, vmath.vector3(x_coord, y_coord, 0))
+	gui.set_visible(stone_clone, true)
+
+	previous_board = copy_board()
+	board[x_index][y_index] = 1
+	new_board = copy_board()
+
+	current_evaluation_value = evaluation_update(x_index, y_index, current_evaluation_value, previous_board, new_board)
+
+	if check_win("white", x_index, y_index) then
+		game_over_menu()
+		gui.set_text(gui.get_node("game_over_menu_text"), "White Wins")
+	end
+
+	TURN = "black"
+
+	turn_indicator()
+end
+
+function ai_move (turn)
+	local best_score_black = 10000000
+	local best_score_white = -10000000
+	local score
+	local move = {}
+	local new_board
+	local new_eval
+	local board_copy = copy_board()
+	local i_min = find_limit(board_copy)[1]
+	local i_max = find_limit(board_copy)[2]
+	local j_min = find_limit(board_copy)[3]
+	local j_max = find_limit(board_copy)[4]
+
+	math.randomseed(os.time())
+	math.random(); math.random(); math.random()
+	
+	if turn == "black" then
+		for i = i_min, i_max do
+			for j = j_min, j_max do
+				new_board = copy_board()
+				if new_board[i][j] == 0 then
+					new_board[i][j] = -1
+					new_eval = evaluation_update(i, j, current_evaluation_value, board_copy, new_board)
+					--print("DEBUG new_eval: ", new_eval, "i: ", i, "j: ", j)
+					tree = minimax_tree("white", new_board, new_eval)
+					score = minimax(tree, 1, -100000000, 100000000, true)
+					--print("DEBUG TURN BLACK score: ", score)
+					--print("i_index: ", i, "j_index: ", j)
+					if score < best_score_black then
+						best_score_black = score
+						move = {i, j}
+					elseif score == best_score_black then
+						value = math.random(2)
+						if value == 1 then
+							best_score_black = score
+							move = {i, j}
+						end
+					end
+				end
+			end
+		end
+	elseif turn == "white" then
+		for i = i_min, i_max do
+			for j = j_min, j_max do
+				new_board = copy_board()
+				if new_board[i][j] == 0 then
+					new_board[i][j] = 1
+					new_eval = evaluation_update(i, j, current_evaluation_value, board_copy, new_board)
+					--print("POINT1")
+					tree = minimax_tree("black", new_board, new_eval)
+					score = minimax(tree, 1, -100000000, 100000000, false)
+					--print("DEBUG TURN WHITE score: ", score)
+					--print("i_index: ", i, "j_index: ", j)
+					if score > best_score_white then
+						best_score_white = score
+						move = {i, j}
+					elseif score == best_score_white then
+						value = math.random(2)
+						if value == 1 then
+							print("DEBUG in ai_move(turn) value: ", value)
+							best_score_black = score
+							move = {i, j}
+						end
+					end
+				end
+			end
+		end
+	end
+	return move
+end
+
+function find_limit (board)
+	local i_min = 15
+	local i_max = 1
+	local j_min = 15
+	local j_max = 1
+	
+	for i = 1, 15 do
+		j = 1
+		while j <= 15 and board[i][j] == 0 do 
+			j = j + 1
+		end
+		if j_min > j then
+			j_min = j
+		end
+	end
+	j_min = math.max(1, j_min - 1)
+	for i = 1, 15 do
+		j = 15
+		while j >= 1 and board[i][j] == 0  do
+			j = j - 1
+		end
+		if j_max < j then
+			j_max = j
+		end
+	end
+	j_max = math.min(15, j_max + 1)
+	for j = 1, 15 do
+		i = 1
+		while i <= 15 and board[i][j] == 0 do
+			i = i + 1
+		end
+		if i_min > i then
+			i_min = i
+		end
+
+	end
+	i_min = math.max(1, i_min - 1)
+	for j = 1, 15 do
+		i = 15
+		while i >= 1 and board[i][j] == 0 do
+			i = i - 1
+		end
+		if i_max < i then
+			i_max = i
+		end
+	end
+	i_max = math.min(15, i_max + 1)
+
+	return {i_min, i_max, j_min, j_max}
+end
+
+function minimax(position, depth, alpha, beta, maximizing_player)
+	if depth == 0 then
+		return position.eval
+	end
+
+	if maximizing_player == true then
+		max_eval = -100000000
+		for i = 1, table.getn(position.next) do
+			eval = minimax(position.next[i], depth - 1, alpha, beta, false)
+			max_eval = math.max(eval, max_eval)
+			alpha = math.max(alpha, eval)
+			if beta <= alpha then
+				break
+			end
+		end
+		return max_eval
+	else
+		min_eval = 100000000
+		for i = 1, table.getn(position.next) do
+			eval = minimax(position.next[i], depth - 1, alpha, beta, true)
+			min_eval = math.min(min_eval,eval)
+			beta = math.min(beta, eval)
+			if beta <= alpha then
+				break
+			end
+		end
+		return min_eval
+	end			
+end
+	
+
+function minimax_tree (turn, board_sent, eval_value)
+	current_board = copy_new_board(board_sent)
+	local new_board	
+	local tree = {next = {}, value = current_board, eval = eval_value}
+
+	--[[for i = 1, 15 do
+		new_board[i] = {}
+		for j = 1, 15 do
+			new_board[i][j] = board_sent[i][j]
+		end
+	end--]]
+	
+	local i_min = find_limit(current_board)[1]
+	local i_max = find_limit(current_board)[2]
+	local j_min = find_limit(current_board)[3]
+	local j_max = find_limit(current_board)[4]
+	
+
+	if turn == "black" then
+		for i = i_min, i_max do
+			for j = j_min, j_max do
+				if current_board[i][j] == 0 then
+					new_board = copy_new_board(current_board)
+					new_board[i][j] = -1 
+					table.insert(tree.next, {next = {}, value = new_board, eval = evaluation_update (i, j, eval_value, tree.value, new_board), x_index = i, y_index = j})
+				end
+			end
+		end
+		--[[i_min = find_limit(new_board)[1]
+		i_max = find_limit(new_board)[2]
+		j_min = find_limit(new_board)[3]
+		j_max = find_limit(new_board)[4]
+		for k = 1, table.getn(tree.next) do
+			for i = i_min, i_max do
+				for j = j_min, j_max do
+					if tree.next[k].value[i][j] == 0 then
+						new_board = copy_board(tree.next[k].value)
+						new_board[i][j] = 1
+						table.insert(tree.next[k].next, {value = new_board, eval = evaluation_update (i, j, tree.next[k].eval, tree.next[k].value, new_board), x_index = i, y_index = j})
+					end
+				end
+			end
+		end--]]
+	elseif turn == "white" then
+		for i = i_min, i_max do
+			for j = j_min, j_max do
+				if current_board[i][j] == 0 then
+					new_board = copy_new_board(current_board)
+					new_board[i][j] = 1 
+					table.insert(tree.next, {next = {}, value = new_board, eval = evaluation_update (i, j, eval_value, tree.value, new_board), x_index = i, y_index = j})
+				end
+			end
+		end
+		--[[i_min = find_limit(new_board)[1]
+		i_max = find_limit(new_board)[2]
+		j_min = find_limit(new_board)[3]
+		j_max = find_limit(new_board)[4]
+		for k = 1, table.getn(tree.next) do
+			for i = i_min, i_max do
+				for j = j_min, j_max do
+					if tree.next[k].value[i][j] == 0 then
+						new_board = copy_board(tree.next[k].value)
+						new_board[i][j] = -1
+						table.insert(tree.next[k].next, {value = new_board, eval = evaluation_update (i, j, tree.next[k].eval, tree.next[k].value, new_board), x_index = i, y_index = j})
+					end
+				end
+			end
+		end--]]
+	end 
+
+	return tree
+end
+
+
+function evaluation_update (x_index, y_index, evaluation_value, board_previous, board)
+	local row = {}
+	local threat
+	local value = evaluation_value
+	
+	for i = 1, 15 do
+		row[i] = board_previous[x_index][i]
+	end
+
+	threat = threat_shapes(row)
+	value = value - evaluation_function(threat[1], threat[2])
+
+
+	for i = 1, 15 do
+		row[i] = board_previous[i][y_index]
+	end
+	threat = threat_shapes(row)
+	value = value - evaluation_function(threat[1], threat[2])
+
+	if x_index >= y_index then
+		for i = 1, 15 - (x_index - y_index) do
+			row[i] = board_previous[x_index - y_index + i][i] 
+		end
+	elseif y_index >= x_index then
+		for i = 1, 15 - (y_index - x_index) do
+			row[i] = board_previous[y_index - x_index + i][i] 
+		end
+	end
+	threat = threat_shapes(row)
+	value = value - evaluation_function(threat[1], threat[2])
+
+	if (x_index + y_index) > 16 then
+		for i = (x_index + y_index) - 15, 15 do
+			row[i] = board_previous[i][(x_index + y_index) - i] 
+		end
+	else
+		for i = 1, (x_index + y_index) - 1 do
+			row[i] = board_previous[i][(x_index + y_index) - i] 
+		end
+	end
+	threat = threat_shapes(row)
+	value = value - evaluation_function(threat[1], threat[2])
+	
+	for i = 1, 15 do
+		row[i] = board[x_index][i]
+	end
+
+	threat = threat_shapes(row)
+	value = value + evaluation_function(threat[1], threat[2])
+	
+	
+	for i = 1, 15 do
+		row[i] = board[i][y_index]
+	end
+	threat = threat_shapes(row)
+	value = value + evaluation_function(threat[1], threat[2])
+	
+
+
+	if x_index >= y_index then
+		for i = 1, 15 - (x_index - y_index) do
+			row[i] = board[i][x_index - y_index + i] 
+		end
+	elseif y_index >= x_index then
+		for i = 1, 15 - (y_index - x_index) do
+			row[i] = board[i][y_index - x_index + i] 
+		end
+	end
+	threat = threat_shapes(row)
+	value = value + evaluation_function(threat[1], threat[2])
+
+	
+	
+	if (x_index + y_index) > 16 then
+		for i = (x_index + y_index) - 15, 15 do
+			row[i] = board[i][(x_index + y_index) - i] 
+		end
+	else
+		for i = 1, (x_index + y_index) - 1 do
+			row[i] = board[i][(x_index + y_index) - i] 
+		end
+	end
+	threat = threat_shapes(row)
+	value = value + evaluation_function(threat[1], threat[2])
+
+	return value
+end
+
+
+function evaluation_function (threat_white, threat_black)
+	value = 1000000 * (threat_white[6] - threat_black[6]) + 100000 * (threat_white[5] - threat_black[5]) + 
+	1000 * (threat_white[4] - threat_black[4]) + 400 * (threat_white[3] - threat_black[3]) + 
+	200 * (threat_white[2] - threat_black[2]) + 50 * (threat_white[1] - threat_black[1])
+
+	return value
+end
+
+
+
+function threat_shapes (row)
+	local threat_black = {0, 0, 0, 0, 0, 0} -- {open 2, closed 3, open 3, closed 4, open 4, 5}
+	local threat_white = {0, 0, 0, 0, 0, 0} -- {open 2, closed 3, open 3, closed 4, open 4, 5}
+	local return_threat = {{}, {}}
+	
+	for i = 1, table.getn(row) -  5 do
+		if row[i] == 0 then
+			if row[i + 1] == 0 then
+				if row[i + 2] == 0 then
+					if row[i + 3] == 1 and row[i + 4] == 1 and row[i + 5] == 0 then
+						threat_white[1] = threat_white[1] + 1
+					elseif row[i + 3] == -1 and row[i + 4] == -1 and row[i + 5] == 0 then
+						threat_black[1] = threat_black[1] + 1
+					end
+				elseif row[i + 2] == 1 then
+					if row[i + 3] == 0 and row[i + 4] == 1 and row[i + 5] == 0 then
+						threat_white[1] = threat_white[1] + 1
+					elseif row[i + 3] == 1 and row[i + 4] == 1 then
+						if row[i + 5] == 0 then
+							threat_white[3] = threat_white[3] + 1
+						elseif row[i + 5] == -1 then
+							threat_white[2] = threat_white[2] + 1
+						end
+					end
+				elseif row[i + 2] == -1 then
+					if row[i + 3] == 0 and row[i + 4] == -1 and row[i + 5] == 0 then
+						threat_black[1] = threat_black[1] + 1
+					elseif row[i + 3] == -1 and row[i + 4] == -1 then
+						if row[i + 5] == 0 then
+							threat_black[3] = threat_black[3] + 1
+						elseif row[i + 5] == 1 then
+							threat_black[2] = threat_black[2] + 1
+						end
+					end
+				end
+			elseif row[i + 1] == 1 then
+				if row[i + 2] == 0 and row[i + 3] == 1 then
+					if row[i + 4] == 0 and row[i + 5] == 0 then
+						threat_white[1] = threat_white[1] + 1
+					elseif row[i + 4] == 1 then
+						if row[i + 5] == 0 then
+							threat_white[3] = threat_white[3] + 1
+						elseif row[i + 5] == -1 then
+							threat_white[2] = threat_white[2] + 1
+						end
+					end
+				elseif row[i + 2] == 1 then
+					if row[i + 3] == 0 then
+						if row[i + 4] == 0 and row[i + 5] == 0 then
+							threat_white[1] = threat_white[1] + 1
+						elseif row[i + 4] == 1 then
+							if row[i + 5] == 0 then
+								threat_white[3] = threat_white[3] + 1
+							elseif row[i + 5] == -1 then
+								threat_white[2] = threat_white[2] + 1
+							end
+						end
+					elseif row[i + 3] == 1 then
+						if row[i + 4] == 0 and row[i + 4] == 0 then
+							threat_white[3] = threat_white[3] + 1
+						elseif row[i + 4] == 1 then
+							if row[i + 5] == 0 then
+								threat_white[5] = threat_white[5] + 1
+							elseif row[i + 5] == -1 then
+								threat_white[4] = threat_white[4] + 1
+							end
+						end
+					end
+				end
+			elseif row[i + 1] == -1 then
+				if row[i + 2] == 0 and row[i + 3] == -1 then
+					if row[i + 4] == 0 and row[i + 5] == 0 then
+						threat_black[1] = threat_black[1] + 1
+					elseif row[i + 4] == -1 then
+						if row[i + 5] == 0 then
+							threat_black[3] = threat_black[3] + 1
+						elseif row[i + 5] == 1 then
+							threat_black[2] = threat_black[2] + 1
+						end
+					end
+				elseif row[i + 2] == -1 then
+					if row[i + 3] == 0 then
+						if row[i + 4] == 0 and row[i + 5] == 0 then
+							threat_black[1] = threat_black[1] + 1
+						elseif row[i + 4] == -1 then
+							if row[i + 5] == 0 then
+								threat_black[3] = threat_black[3] + 1
+							elseif row[i + 5] == 1 then
+								threat_black[2] = threat_black[2] + 1
+							end
+						end
+					elseif row[i + 3] == -1 then
+						if row[i + 4] == 0 and row[i + 4] == 0 then
+							threat_black[3] = threat_black[3] + 1
+						elseif row[i + 4] == -1 then
+							if row[i + 5] == 0 then
+								threat_black[5] = threat_black[5] + 1
+							elseif row[i + 5] == 1 then
+								threat_black[4] = threat_black[4] + 1
+							end
+						end
+					end
+				end
+			end
+		elseif row[i] == 1 then
+			if row[i + 1] == 0 and row[i + 2] == 1 and row[i + 3] == 1 then
+				if row[i + 4] == 0 and i == 1 then
+					threat_white[2] = threat_white[2] + 1
+				elseif row[i + 4] == 1 then
+					threat_white[4] = threat_white[4] + 1
+				end
+			elseif row[i + 1] == 1 then
+				if row[i + 2] == 0 and row[i + 3] == 1 then
+					if row[i + 4] == 0 and i == 1 then
+						threat_white[2] = threat_white[2] + 1
+					elseif row[i + 4] == 1 then
+						threat_white[4] = threat_white[4] + 1
+					end
+				elseif row[i + 2] == 1 then
+					if row[i + 3] == 0 then
+						if row[i + 4] == 0 and i == 1 then
+							threat_white[2] = threat_white[2] + 1
+						elseif row[i + 4] == 1 then
+							threat_white[4] = threat_white[4] + 1
+						end
+					elseif row[i + 3] == 1 then
+						if row[i + 4] == 0 and i == 1 then
+							threat_white[4] = threat_white[4] + 1
+						elseif row[i + 4] == 1 then
+							threat_white[6] = threat_white[6] + 1
+						end
+					end
+				end
+			elseif row[i + 1] == -1 then
+				if row[i + 2] == 0 and row[i + 3] == -1 and row[i + 4] == -1 and row[i + 5] == 0 then
+					threat_black[2] = threat_black[2] + 1
+				elseif row[i + 2] == -1 then
+					if row[i + 3] == 0 and row[i + 4] == -1 and row[i + 5] == 0 then
+						threat_black[2] = threat_black[2] + 1
+					elseif row[i + 3] == -1 then
+						if row[i + 4] == 0 and row[i + 5] == 0 then
+							threat_black[2] = threat_black[2] + 1
+						elseif row[i + 4] == -1 and row[i + 5] == 0 then
+							threat_black[4] = threat_black[4] + 1
+						end
+					end
+				end
+			end
+		elseif row[i] == -1 then
+			if row[i + 1] == 0 and row[i + 2] == -1 and row[i + 3] == -1 then
+				if row[i + 4] == 0 and i == 1 then
+					threat_black[2] = threat_black[2] + 1
+				elseif row[i + 4] == -1 then
+					threat_black[4] = threat_black[4] + 1
+				end
+			elseif row[i + 1] == -1 then
+				if row[i + 2] == 0 and row[i + 3] == -1 then
+					if row[i + 4] == 0 and i == 1 then
+						threat_black[2] = threat_black[2] + 1
+					elseif row[i + 4] == -1 then
+						threat_black[4] = threat_black[4] + 1
+					end
+				elseif row[i + 2] == -1 then
+					if row[i + 3] == 0 then
+						if row[i + 4] == 0 and i == 1 then
+							threat_black[2] = threat_black[2] + 1
+						elseif row[i + 4] == -1 then
+							threat_black[4] = threat_black[4] + 1
+						end
+					elseif row[i + 3] == -1 then
+						if row[i + 4] == 0 and i == 1 then
+							threat_black[4] = threat_black[4] + 1
+						elseif row[i + 4] == -1 then
+							threat_black[6] = threat_black[6] + 1
+						end
+					end
+				end
+			elseif row[i + 1] == 1 then
+				if row[i + 2] == 0 and row[i + 3] == 1 and row[i + 4] == 1 and row[i + 5] == 0 then
+					threat_white[2] = threat_white[2] + 1
+				elseif row[i + 2] == 1 then
+					if row[i + 3] == 0 and row[i + 4] == 1 and row[i + 5] == 0 then
+						threat_white[2] = threat_white[2] + 1
+					elseif row[i + 3] == 1 then
+						if row[i + 4] == 0 and row[i + 5] == 0 then
+							threat_white[2] = threat_white[2] + 1
+						elseif row[i + 4] == 1 and row[i + 5] == 0 then
+							threat_white[4] = threat_white[4] + 1
+						end
+					end
+				end
+			end
+		end
+	end
+
+	i = table.getn(row) - 4
+	if row[i] == 0 then
+		if row[i + 1] == 0 then
+			if row[i + 2] == 1 and row[i + 3] == 1 and row[i + 4] == 1 then
+				threat_white[2] = threat_white[2] + 1
+			elseif row[i + 2] == -1 and row[i + 3] == -1 and row[i + 4] == -1 then
+				threat_black[2] = threat_black[2] + 1
+			end
+		elseif row[i + 1] == 1 then
+			if row[i + 2] == 0 and row[i + 3] == 1 and row[i + 4] == 1 then
+				threat_white[2] = threat_white[2] + 1 
+			elseif row[i + 2] == 1 then
+				if row[i + 3] == 0 and row[i + 4] == 1 then
+					threat_white[2] = threat_white[2] + 1
+				elseif row [i + 3] == 1 and row[i + 4] == 1 then
+					threat_white[4] = threat_white[4] + 1
+				end
+			end
+		elseif row[i + 1] == -1 then
+			if row[i + 2] == 0 and row[i + 3] == -1 and row[i + 4] == -1 then
+				threat_black[2] = threat_black[2] + 1 
+			elseif row[i + 2] == -1 then
+				if row[i + 3] == 0 and row[i + 4] == -1 then
+					threat_black[2] = threat_black[2] + 1
+				elseif row [i + 3] == -1 and row[i + 4] == -1 then
+					threat_black[4] = threat_black[4] + 1
+				end
+			end
+		end
+	elseif row[i] == 1 then
+		if row[i + 1] == 0 and row[i + 2] == 1 and row[i + 3] == 1 and row[i + 4] == 1 then
+			threat_white[4] = threat_white[4] + 1
+		elseif row[i + 1] == 1 then
+			if row[i + 2] == 0 and row[i + 3] == 1 and row[i + 4] == 1 then
+				threat_white[4] = threat_white[4] + 1
+			elseif row[i + 2] == 1 then
+				if row[i + 3] == 0 and row[i + 4] == 1 then
+					threat_white[4] = threat_white[4] + 1
+				elseif row[i + 3] == 1 and row[i + 4] == 1 then
+					threat_white[6] = threat_white[6] + 1
+				end
+			end
+		end
+	elseif row[i] == -1 then
+		if row[i + 1] == 0 and row[i + 2] == -1 and row[i + 3] == -1 and row[i + 4] == -1 then
+			threat_black[4] = threat_black[4] + 1
+		elseif row[i + 1] == -1 then
+			if row[i + 2] == 0 and row[i + 3] == -1 and row[i + 4] == -1 then
+				threat_black[4] = threat_black[4] + 1
+			elseif row[i + 2] == -1 then
+				if row[i + 3] == 0 and row[i + 4] == -1 then
+					threat_black[4] = threat_black[4] + 1
+				elseif row[i + 3] == -1 and row[i + 4] == -1 then
+					threat_black[6] = threat_black[6] + 1
+				end
+			end
+		end
+	end
+
+	for i = 1, 6 do
+		return_threat[1][i] = threat_white[i]
+		return_threat[2][i] = threat_black[i]
+	end
+	return return_threat
+end
+
+		

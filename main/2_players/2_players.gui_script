@@ -1,0 +1,224 @@
+local TURN = "black"
+local available = true
+local black_stone = {} 
+local white_stone = {}
+local game_over = false
+
+function init(self)	
+	
+	msg.post(".", "acquire_input_focus")
+	gui.set_visible(gui.get_node("selection_box"), false)
+	gui.set_visible(gui.get_node("white_stone"), false)
+	gui.set_visible(gui.get_node("black_stone"), false)
+
+	for i = 1, 15 do
+		black_stone[i] = {}
+		white_stone[i] = {}
+		for j = 1, 15 do
+			black_stone[i][j] = 0
+			white_stone[i][j] = 0
+		end
+	end 
+end 
+
+
+function on_input(self, action_id, action)
+	
+	local x_pos = 0
+	local y_pos = 0
+	local x_index_pos = 0
+	local y_index_pos = 0
+	
+	if action_id == hash("touch") then
+		if (action.x >= 5 and action.x <= 635 and action.y >= 253 and action.y <= 883) then
+			selection_box(action)
+		end 
+
+		if gui.pick_node (gui.get_node("place_button"), action.x, action.y) 
+		and gui.get_visible(gui.get_node("selection_box")) then
+			place_stone()
+		end
+
+		if gui.is_enabled(gui.get_node("home_text")) 
+		and gui.pick_node (gui.get_node("home_text"), action.x, action.y) then
+			msg.post("main:/main_gui#main", "home_selected", {mode = "2 players"})
+		end	
+
+		if gui.is_enabled(gui.get_node("replay_text")) 
+		and gui.pick_node (gui.get_node("replay_text"), action.x, action.y) then
+			msg.post("main:/main_gui#main", "replay_selected", {mode = "2 players"})
+		end	
+	end
+end
+
+
+function turn_indicator ()
+	if TURN == "white" then
+		gui.set_visible(gui.get_node("player_1_not_turn"), true)
+		gui.set_visible(gui.get_node("player_2_not_turn"), false)
+	else
+		gui.set_visible(gui.get_node("player_1_not_turn"), false)
+		gui.set_visible(gui.get_node("player_2_not_turn"), true)
+	end
+end
+
+
+--places the selection box on the correspdonding square on the board
+function selection_box (action)
+	x_pos = math.floor((action.x - 5) /42) * 42 + 26
+	y_pos = math.floor((action.y - 253) /42) * 42 + 274
+	gui.set_position(gui.get_node("selection_box"), vmath.vector3(x_pos, y_pos, 0))
+	gui.set_visible(gui.get_node("selection_box"), true)
+end 
+
+
+--places the stone on the position designated by the selection box
+function place_stone ()
+	local x_index_pos = (gui.get_position(gui.get_node("selection_box")).x - 26)/42 + 1
+	local y_index_pos = (gui.get_position(gui.get_node("selection_box")).y - 274)/42 + 1
+
+	if black_stone[x_index_pos][y_index_pos] == 1 or white_stone[x_index_pos][y_index_pos] == 1 then
+		available = false
+	else
+		available = true
+	end 
+	
+	if available == true then
+		if TURN == "black" then
+			gui.set_visible(gui.get_node("selection_box"), false)
+			local clone = gui.clone(gui.get_node("black_stone"))
+
+			gui.set_position(clone, gui.get_position(gui.get_node("selection_box")))
+			gui.set_visible(clone, true)
+
+			black_stone[x_index_pos][y_index_pos] = 1
+
+			TURN = "white"
+
+			if(check_win("black", x_index_pos, y_index_pos)) then
+				game_over_menu()
+				gui.set_text(gui.get_node("game_over_menu_text"), "Black Wins")
+			end
+			
+		elseif TURN == "white" then
+			gui.set_visible(gui.get_node("selection_box"), false)
+			local clone = gui.clone(gui.get_node("white_stone"))
+
+			gui.set_position(clone, gui.get_position(gui.get_node("selection_box")))
+			gui.set_visible(clone, true)
+
+			white_stone[x_index_pos][y_index_pos] = 1
+
+			TURN = "black"
+			
+			if(check_win("white", x_index_pos, y_index_pos)) then
+				game_over_menu()
+				gui.set_text(gui.get_node("game_over_menu_text"), "White Wins")
+			end
+
+			
+		end 
+	end 
+
+	turn_indicator()
+end 	
+
+function game_over_menu ()
+	gui.set_visible(gui.get_node("game_over_shade"), true)
+	gui.set_enabled(gui.get_node("game_over_menu"), true)
+	gui.set_enabled(gui.get_node("home_text"), true)
+	gui.set_enabled(gui.get_node("replay_text"), true)
+	gui.set_enabled(gui.get_node("place_button"), false)
+	gui.set_enabled(gui.get_node("selection_box"), false)
+end
+
+function check_win (color, x_pos, y_pos)
+	local counter = 0
+	local i = x_pos
+	local j = y_pos
+	local stone
+	
+	if color == "black" then 
+		stone = black_stone
+	else
+		stone = white_stone
+	end
+
+	-- find the starting position within a row
+	while stone[i][j] == 1 do
+		i = i - 1
+	end 
+	i = i + 1
+
+	-- count the number of connected stones
+	while stone[i][j] == 1 do
+		counter = counter + 1
+		i = i + 1
+		if counter == 5 then
+			return (true)
+		end
+	end
+
+	-- find the starting position within a column
+	counter = 0
+	i = x_pos
+	j = y_pos
+	while stone[i][j] == 1 do
+		j = j - 1
+	end 
+	j = j + 1
+
+	-- count the number of connected stones
+	while stone[i][j] == 1 do
+		counter = counter + 1
+		j = j + 1
+		if counter == 5 then
+			return (true)
+		end
+	end
+
+	-- find the starting position within a diagonal
+	counter = 0
+	i = x_pos
+	j = y_pos
+	while stone[i][j] == 1 do
+		i = i - 1
+		j = j - 1
+	end 
+	i = i + 1
+	j = j + 1
+
+	while stone[i][j] == 1 do
+		counter = counter + 1
+		i = i + 1
+		j = j + 1
+		if counter == 5 then
+			return (true)
+		end
+	end
+
+	counter = 0
+	i = x_pos
+	j = y_pos
+	while stone[i][j] == 1 do
+		i = i + 1
+		j = j - 1
+	end 
+	i = i - 1
+	j = j + 1
+
+	while stone[i][j] == 1 do
+		counter = counter + 1
+		i = i - 1
+		j = j + 1
+		if counter == 5 then
+			return (true)
+		end
+	end
+	return (false)
+end
+
+
+
+
+
