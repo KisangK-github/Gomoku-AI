@@ -11,6 +11,7 @@ Standard board size for Gomoku, 13 x 13, is used. To enhance the user immersion,
 When the game is over, the game-over menu is displayed showing the winner, and the user has an option to replay or return to the main menu. 
 
 ## How is AI implemented?
+### What is Minimax algorithm
 The mini-max algorithm has been chosen for the AI. The minimax algorithm is a decision-making algorithm commonly used in two-player games. It works by exploring all possible future moves and outcomes in the game tree, and then selecting the move that maximizes the player's chance of winning or minimizes the opponent's chance of winning. It assumes that the opponent will make the move that is worst for the player, and then tries to find the best move based on that assumption.
 
 For example, in minimax algorithm can be implemented in Tic Tac Toe in the following way. 
@@ -22,4 +23,8 @@ For example, in minimax algorithm can be implemented in Tic Tac Toe in the follo
 
 However, in Gomoku, because there are so many possible moves on each turn, it grows exponentially as the turns increase. It takes too much time to track all the possible scenarios. So in this AI, only next two turns have been considered for calculation. Because there needs to be some kind of score to determine which state is better for which player (Step 4 from above example), there had to be an evaluation function. 
 
-### Evaluating Function
+### Evaluation Function
+Evaluation function is calculated based on number of threats of each player. An example of a threat is 4 stones of the same colors in a row, because the opponent needs to defend if one side is already defended, or the game is over is no side is defended. Different threats have been categorized and provided with different weights. The weighted sum is calculated and based on their sign and magnitude, how much advantage or disadvantage each player has can be determined.
+
+### How Minimax algorithm is implemented
+Based on the score, the algorithm decides which move leads to a layout that is the most favored towards the player in turn. A tree has been chosen for the data structure. The root node represents the current board. From the node, the possible moves are shown as children nodes, from which another possible moves derive as grandchildren. The board score at the grandchildren node 
