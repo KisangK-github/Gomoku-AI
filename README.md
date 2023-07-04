@@ -1,5 +1,7 @@
 # Gomoku AI
 
+download link: https://drive.google.com/drive/folders/1n5CulQi0v2_I8RUiFQNH-xxgEDDN7oqQ?usp=drive_link
+
 ## What is Gomoku?
 Gomoku is a traditional board game originating from Japan, played by two players who take turns placing stones on a board with the goal of connecting five stones in a row horizontally, vertically, or diagonally.
 
